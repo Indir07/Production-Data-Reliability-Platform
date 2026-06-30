@@ -31,7 +31,7 @@ jobs:
         run: pip install ruff==0.4.9
 
       - name: Lint
-        run: ruff check services/api/app services/api/tests
+        run: ruff check services/ --output-format=github
 
   # ── Unit + Integration Tests ────────────────────────────────────────────────
   test:
