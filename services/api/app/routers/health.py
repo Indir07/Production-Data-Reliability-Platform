@@ -1,4 +1,5 @@
 import time
+
 import structlog
 from fastapi import APIRouter
 from pydantic import BaseModel
