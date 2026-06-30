@@ -183,9 +183,7 @@ make lint-fix    # Auto-fix lint errors
 ## 🤝 Author
 
 **Indir** — Data Engineer  
-📍 Applying for Data Engineering roles in the Netherlands & Europe  
 🔗 [GitHub](https://github.com/Indir07)
-
 ---
 
 ## 📄 License
