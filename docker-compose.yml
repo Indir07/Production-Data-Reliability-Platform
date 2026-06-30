@@ -1,0 +1,182 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Production Data Reliability Platform — Local Development Stack
+# ─────────────────────────────────────────────────────────────────────────────
+# Services:
+#   api         — FastAPI application (http://localhost:8000)
+#   worker      — Celery worker (Sprint 3)
+#   db          — PostgreSQL 16 + TimescaleDB
+#   redis       — Redis 7 (task queue + cache)
+#   prometheus  — Metrics scraping (http://localhost:9090)
+#   grafana     — Dashboards (http://localhost:3000)
+#   marquez     — OpenLineage server (http://localhost:5000)
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-common-env: &common-env
+  ENVIRONMENT: development
+  DEBUG: "true"
+  DATABASE_URL: postgresql+asyncpg://pdrp:pdrp_secret@db:5432/pdrp
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  SECRET_KEY: dev-secret-key-not-for-production
+  OPENLINEAGE_URL: http://marquez:5000
+
+services:
+
+  # ── API ────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: pdrp/api:dev
+    container_name: pdrp-api
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *common-env
+    volumes:
+      - ./services/api/app:/app/app   # hot-reload in dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Worker (Celery) — Sprint 3 ─────────────────────────────────────────────
+  worker:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: pdrp/api:dev
+    container_name: pdrp-worker
+    environment:
+      <<: *common-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: echo "Celery worker — implemented in Sprint 3"
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Database ───────────────────────────────────────────────────────────────
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: pdrp-db
+    environment:
+      POSTGRES_DB: pdrp
+      POSTGRES_USER: pdrp
+      POSTGRES_PASSWORD: pdrp_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pdrp-db-data:/var/lib/postgresql/data
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdrp -d pdrp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: pdrp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - pdrp-redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: pdrp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - pdrp-prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=15d"
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: pdrp-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: pdrp_admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - pdrp-grafana-data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── Marquez (OpenLineage) ──────────────────────────────────────────────────
+  marquez:
+    image: marquezproject/marquez:latest
+    container_name: pdrp-marquez
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      MARQUEZ_DB_HOST: db
+      MARQUEZ_DB_PORT: 5432
+      MARQUEZ_DB_USER: pdrp
+      MARQUEZ_DB_PASSWORD: pdrp_secret
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+# ── Volumes ────────────────────────────────────────────────────────────────
+volumes:
+  pdrp-db-data:
+  pdrp-redis-data:
+  pdrp-prometheus-data:
+  pdrp-grafana-data:
+
+# ── Networks ───────────────────────────────────────────────────────────────
+networks:
+  pdrp-network:
+    driver: bridge
