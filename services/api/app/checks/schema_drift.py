@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+
 import structlog
 
 from app.checks.base import BaseCheck, CheckConfig, CheckResult, CheckStatus

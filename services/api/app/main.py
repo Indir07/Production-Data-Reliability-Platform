@@ -1,14 +1,14 @@
 import time
 import uuid
-import structlog
 from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.config import get_settings
-from app.routers import health, datasources, checks, runs, reports
+from app.routers import checks, datasources, health, reports, runs
 
 # ── Structured logging setup ─────────────────────────────────────────────────
 structlog.configure(
@@ -113,12 +113,12 @@ def create_app() -> FastAPI:
         )
 
     # ── Routers ───────────────────────────────────────────────────────────────
-    API_PREFIX = "/api/v1"
-    app.include_router(health.router, prefix=API_PREFIX, tags=["Health"])
-    app.include_router(datasources.router, prefix=API_PREFIX, tags=["Data Sources"])
-    app.include_router(checks.router, prefix=API_PREFIX, tags=["Checks"])
-    app.include_router(runs.router, prefix=API_PREFIX, tags=["Runs"])
-    app.include_router(reports.router, prefix=API_PREFIX, tags=["Reports"])
+    api_prefix = "/api/v1"
+    app.include_router(health.router, prefix=api_prefix, tags=["Health"])
+    app.include_router(datasources.router, prefix=api_prefix, tags=["Data Sources"])
+    app.include_router(checks.router, prefix=api_prefix, tags=["Checks"])
+    app.include_router(runs.router, prefix=api_prefix, tags=["Runs"])
+    app.include_router(reports.router, prefix=api_prefix, tags=["Reports"])
 
     return app
 

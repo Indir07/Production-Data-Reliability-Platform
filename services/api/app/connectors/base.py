@@ -48,7 +48,7 @@ class MockConnector(BaseConnector):
         self._results: dict[str, Any] = {}
         self._default: Any = None
 
-    def set_result(self, sql_fragment: str, result: Any) -> "MockConnector":
+    def set_result(self, sql_fragment: str, result: Any) -> MockConnector:
         """
         Register a result for any query containing `sql_fragment`.
         Returns self for chaining.
@@ -56,7 +56,7 @@ class MockConnector(BaseConnector):
         self._results[sql_fragment] = result
         return self
 
-    def set_default(self, result: Any) -> "MockConnector":
+    def set_default(self, result: Any) -> MockConnector:
         """Fallback result when no sql_fragment matches."""
         self._default = result
         return self

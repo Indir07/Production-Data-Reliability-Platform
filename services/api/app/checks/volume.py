@@ -35,7 +35,6 @@ How to compute baseline_mean and baseline_stddev:
 """
 from __future__ import annotations
 
-import math
 import structlog
 
 from app.checks.base import BaseCheck, CheckConfig, CheckResult, CheckStatus

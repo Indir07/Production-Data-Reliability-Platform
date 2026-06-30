@@ -86,7 +86,7 @@ class BaseCheck(ABC):
 
     async def run(
         self,
-        connector: "BaseConnector",  # noqa: F821
+        connector: BaseConnector,  # noqa: F821
         config: CheckConfig,
     ) -> CheckResult:
         """
@@ -111,7 +111,7 @@ class BaseCheck(ABC):
     @abstractmethod
     async def _execute(
         self,
-        connector: "BaseConnector",  # noqa: F821
+        connector: BaseConnector,  # noqa: F821
         config: CheckConfig,
     ) -> CheckResult:
         """Implement the actual check logic here."""
