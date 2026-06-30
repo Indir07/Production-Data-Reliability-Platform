@@ -1,0 +1,33 @@
+groups:
+  - name: pdrp_check_failures
+    interval: 30s
+    rules:
+      # Fire when check failure rate spikes
+      - alert: DataQualityCheckFailureHigh
+        expr: rate(check_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "High check failure rate"
+          description: "More than 10% of checks are failing in the last 5 minutes."
+
+      # Fire when API is down
+      - alert: PDRPApiDown
+        expr: up{job="pdrp-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PDRP API is unreachable"
+          description: "The PDRP API has been down for more than 1 minute."
+
+      # Fire when check execution is too slow
+      - alert: CheckExecutionSlow
+        expr: histogram_quantile(0.99, rate(check_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Check execution p99 exceeds 10s"
+          description: "99th percentile check duration is above the 10s SLA target."

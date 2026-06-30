@@ -2,15 +2,24 @@ version: "3.9"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Production Data Reliability Platform — Local Development Stack
+# Budget: $0/month — 100% open-source, runs on Docker Compose
 # ─────────────────────────────────────────────────────────────────────────────
 # Services:
-#   api         — FastAPI application (http://localhost:8000)
-#   worker      — Celery worker (Sprint 3)
-#   db          — PostgreSQL 16 + TimescaleDB
-#   redis       — Redis 7 (task queue + cache)
-#   prometheus  — Metrics scraping (http://localhost:9090)
-#   grafana     — Dashboards (http://localhost:3000)
-#   marquez     — OpenLineage server (http://localhost:5000)
+#   api           — FastAPI application         http://localhost:8000/docs
+#   worker        — Celery worker               (Sprint 3)
+#   db            — PostgreSQL 16 + TimescaleDB http://localhost:5432
+#   redis         — Redis 7 (queue + cache)     http://localhost:6379
+#   prometheus    — Metrics scraping            http://localhost:9090
+#   alertmanager  — Alerts routing [FREE]       http://localhost:9093  (Sprint 5)
+#   grafana       — Dashboards [FREE OSS]       http://localhost:3000
+#   marquez       — OpenLineage lineage         http://localhost:5000
+#   mailhog       — SMTP dev server [FREE]      http://localhost:8025  (Sprint 4)
+#
+# FREE replacements used:
+#   PagerDuty     → Alertmanager (Apache 2.0)
+#   SendGrid/SES  → MailHog for dev, Alertmanager email for prod
+#   EKS/GKE       → Docker Compose (local) / k3s (prod simulation)
+#   Auth0/Okta    → Keycloak (Sprint 7, Apache 2.0)
 # ─────────────────────────────────────────────────────────────────────────────
 
 x-common-env: &common-env
@@ -150,7 +159,7 @@ services:
     networks:
       - pdrp-network
 
-  # ── Marquez (OpenLineage) ──────────────────────────────────────────────────
+  # ── Marquez (OpenLineage) — Apache 2.0, free ──────────────────────────────
   marquez:
     image: marquezproject/marquez:latest
     container_name: pdrp-marquez
@@ -169,12 +178,45 @@ services:
     networks:
       - pdrp-network
 
+  # ── Alertmanager — FREE replacement for PagerDuty (Sprint 5) ──────────────
+  # Industry standard: PagerDuty (~$21/user/month)
+  # Free alternative: Prometheus Alertmanager (Apache 2.0, self-hosted)
+  # Handles: deduplication, silencing, routing to Slack/email/webhook
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: pdrp-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
+  # ── MailHog — FREE SMTP dev server for email alerts (Sprint 4) ─────────────
+  # Industry standard: SendGrid / AWS SES (paid per email)
+  # Free alternative: MailHog (MIT) — catches all outbound email in dev UI
+  # In production: use a free Gmail SMTP relay or Brevo (free tier 300/day)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: pdrp-mailhog
+    ports:
+      - "1025:1025"   # SMTP port (API sends emails here)
+      - "8025:8025"   # Web UI to view caught emails
+    restart: unless-stopped
+    networks:
+      - pdrp-network
+
 # ── Volumes ────────────────────────────────────────────────────────────────
 volumes:
   pdrp-db-data:
   pdrp-redis-data:
   pdrp-prometheus-data:
   pdrp-grafana-data:
+  pdrp-alertmanager-data:
 
 # ── Networks ───────────────────────────────────────────────────────────────
 networks:
