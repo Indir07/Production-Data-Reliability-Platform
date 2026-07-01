@@ -1,14 +1,28 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.check_run import CheckRun
+from app.schemas.check import CheckRunResponse
 
 router = APIRouter()
 
 
-class Stub(BaseModel):
-    message: str
-
-
-@router.get("/runs/{run_id}", response_model=Stub)
-async def get_run(run_id: str):
-    """Get a single check run result. [Sprint 2]"""
-    return Stub(message=f"Run {run_id} — implemented in Sprint 2")
+@router.get(
+    "/runs/{run_id}",
+    response_model=CheckRunResponse,
+    summary="Get a single check run result",
+)
+async def get_run(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> CheckRunResponse:
+    """Returns the full result of a specific check run including metric values and details."""
+    result = await db.execute(select(CheckRun).where(CheckRun.id == run_id))
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="CheckRun not found")
+    return CheckRunResponse.model_validate(run)
