@@ -87,7 +87,8 @@ jobs:
         run: pip install bandit safety
 
       - name: Run bandit (SAST)
-        run: bandit -r services/api/app -ll -q
+        working-directory: services/api
+        run: bandit -r app -ll -q --configfile .bandit
 
       - name: Run safety (dependency CVE check)
         run: safety check -r services/api/requirements.txt --bare

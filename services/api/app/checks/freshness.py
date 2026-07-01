@@ -27,7 +27,13 @@ from __future__ import annotations
 
 import structlog
 
-from app.checks.base import BaseCheck, CheckConfig, CheckResult, CheckStatus
+from app.checks.base import (
+    BaseCheck,
+    CheckConfig,
+    CheckResult,
+    CheckStatus,
+    validate_sql_identifier,
+)
 from app.connectors.base import BaseConnector
 
 logger = structlog.get_logger()
@@ -64,18 +70,31 @@ class FreshnessCheck(BaseCheck):
         max_age_hours: float = float(params.get("max_age_hours", 24.0))
         use_count: bool = bool(params.get("use_count", True))
 
+        # Validate column name — prevents SQL injection via user-supplied params
+        # (table name is already validated in CheckConfig.__post_init__)
+        try:
+            timestamp_col = validate_sql_identifier(timestamp_col, "timestamp_column")
+        except ValueError as e:
+            return CheckResult(
+                status=CheckStatus.ERROR,
+                message=str(e),
+                metric_name="age_hours",
+                metric_value=None,
+                threshold=None,
+            )
+
         # ── Build SQL ─────────────────────────────────────────────────────────
         # EXTRACT(EPOCH FROM ...) works in PostgreSQL.
         # BigQuery equivalent: TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(...), HOUR)
         # We'll abstract dialect differences in Sprint 2's connector layer.
-        sql = f"""
+        sql = f"""  # nosec B608 - table/col validated by validate_sql_identifier()
             SELECT
                 MAX({timestamp_col})                         AS last_updated_at,
                 EXTRACT(EPOCH FROM (NOW() - MAX({timestamp_col}))) / 3600.0
                                                              AS age_hours,
                 COUNT(*)                                     AS row_count
             FROM {table}
-        """  # noqa: S608 — table name validated by CheckConfig, not user input
+        """
 
         logger.info(
             "freshness_check_running",

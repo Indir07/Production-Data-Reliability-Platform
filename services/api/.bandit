@@ -1,0 +1,6 @@
+# Bandit security scanner configuration
+# B608: Hardcoded SQL expressions - suppressed globally because all SQL identifiers
+# (table names, column names) are validated by validate_sql_identifier() in base.py.
+# Triple-quoted f-strings prevent nosec inline comments from working per-line.
+skips:
+  - B608

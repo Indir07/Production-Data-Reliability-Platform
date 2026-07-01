@@ -26,7 +26,13 @@ from __future__ import annotations
 
 import structlog
 
-from app.checks.base import BaseCheck, CheckConfig, CheckResult, CheckStatus
+from app.checks.base import (
+    BaseCheck,
+    CheckConfig,
+    CheckResult,
+    CheckStatus,
+    validate_sql_identifier,
+)
 from app.connectors.base import BaseConnector
 
 logger = structlog.get_logger()
@@ -62,6 +68,18 @@ class NullCheck(BaseCheck):
         sample_rate: float = float(params.get("sample_rate", 1.0))
         sample_rate = max(0.001, min(1.0, sample_rate))  # clamp to [0.001, 1.0]
 
+        # Validate column name — prevents SQL injection via user-supplied params
+        try:
+            column = validate_sql_identifier(column, "column")
+        except ValueError as e:
+            return CheckResult(
+                status=CheckStatus.ERROR,
+                message=str(e),
+                metric_name="null_rate",
+                metric_value=None,
+                threshold=None,
+            )
+
         # ── Build sampling clause ─────────────────────────────────────────────
         # TABLESAMPLE BERNOULLI(pct) is ANSI SQL and supported by PostgreSQL,
         # BigQuery, Snowflake, and Redshift.
@@ -70,13 +88,13 @@ class NullCheck(BaseCheck):
             pct = round(sample_rate * 100, 2)
             sample_clause = f"TABLESAMPLE BERNOULLI ({pct})"
 
-        sql = f"""
+        sql = f"""  # nosec B608 - table/col validated by validate_sql_identifier()
             SELECT
-                COUNT(*)                  AS total_rows,
-                COUNT({column})           AS non_null_rows,
+                COUNT(*)                   AS total_rows,
+                COUNT({column})            AS non_null_rows,
                 COUNT(*) - COUNT({column}) AS null_rows
             FROM {table} {sample_clause}
-        """  # noqa: S608
+        """
 
         logger.info(
             "null_check_running",

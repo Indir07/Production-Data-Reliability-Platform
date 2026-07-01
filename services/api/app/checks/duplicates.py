@@ -31,7 +31,13 @@ from __future__ import annotations
 
 import structlog
 
-from app.checks.base import BaseCheck, CheckConfig, CheckResult, CheckStatus
+from app.checks.base import (
+    BaseCheck,
+    CheckConfig,
+    CheckResult,
+    CheckStatus,
+    validate_sql_identifier,
+)
 from app.connectors.base import BaseConnector
 
 logger = structlog.get_logger()
@@ -67,6 +73,18 @@ class DuplicateCheck(BaseCheck):
         sample_rate: float = float(params.get("sample_rate", 1.0))
         sample_rate = max(0.001, min(1.0, sample_rate))
 
+        # Validate each PK column — prevents SQL injection via user-supplied column names
+        try:
+            pk_columns = [validate_sql_identifier(col, "primary_key_column") for col in pk_columns]
+        except ValueError as e:
+            return CheckResult(
+                status=CheckStatus.ERROR,
+                message=str(e),
+                metric_name="duplicate_rate",
+                metric_value=None,
+                threshold=None,
+            )
+
         # ── Build DISTINCT expression for composite PKs ───────────────────────
         pk_expr = ", ".join(pk_columns)
 
@@ -75,12 +93,12 @@ class DuplicateCheck(BaseCheck):
             pct = round(sample_rate * 100, 2)
             sample_clause = f"TABLESAMPLE BERNOULLI ({pct})"
 
-        sql = f"""
+        sql = f"""  # nosec B608 - table/pk_cols validated by validate_sql_identifier()
             SELECT
                 COUNT(*)                    AS total_rows,
                 COUNT(DISTINCT ({pk_expr})) AS unique_rows
             FROM {table} {sample_clause}
-        """  # noqa: S608
+        """
 
         logger.info(
             "duplicate_check_running",

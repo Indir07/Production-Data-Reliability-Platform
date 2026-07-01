@@ -90,7 +90,7 @@ class VolumeCheck(BaseCheck):
         min_row_count: int = int(params.get("min_row_count", 1))
 
         # ── Count rows ────────────────────────────────────────────────────────
-        sql = f"SELECT COUNT(*) AS row_count FROM {table}"  # noqa: S608
+        sql = f"SELECT COUNT(*) AS row_count FROM {table}"  # nosec B608 — table validated by CheckConfig
 
         logger.info(
             "volume_check_running",
